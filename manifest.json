@@ -1,0 +1,21 @@
+{
+    "manifest_version" : 2,
+    "name": "Focus Timer",
+    "version": "1.0",
+
+    "description": "Simple pomodoro style timer to help you focus.",
+
+    "background": {
+        "scripts": ["background.js"]
+    },
+
+    "permissions": [
+        "storage"
+    ],
+
+    "browser_action": {
+        "default_icon": "icon.png",
+        "default_title": "Focus Timer",
+        "default_popup": "view.html"
+    }
+}
