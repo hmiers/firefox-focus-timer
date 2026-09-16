@@ -134,6 +134,10 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     } else if (message.action === "resetSession") {
         let currentDuration = getCurrentDuration();
         await resetTimer(currentDuration);
+    } else if (message.action === "resetRound") {
+        currentSession = 0;
+        isBreak = false;
+        await resetTimer(focusDuration);
     }
 });
 
