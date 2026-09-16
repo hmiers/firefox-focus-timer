@@ -2,6 +2,7 @@ console.log("Hello from popup.js");
 
 const timeDisplay = document.getElementById("time-display");
 const playPauseBtn = document.getElementById("play-pause-btn");
+const resetSessionBtn = document.getElementById("reset-session-btn");
 
 let isRunning = false;
 
@@ -27,6 +28,11 @@ playPauseBtn.addEventListener("click", async () => {
     await browser.runtime.sendMessage({
         action: isRunning ? "pause" : "play"
     });
+});
+
+resetSessionBtn.addEventListener("click", async () => {
+    // Sends message to background.js to reset the current session
+    await browser.runtime.sendMessage({ action: "resetSession" });
 });
 
 browser.storage.onChanged.addListener((changes, area) => {

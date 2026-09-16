@@ -34,7 +34,7 @@ async function loadDurations() {
     }
 }
 
-// Returns the next phase of the session and updates currentSession & isBreak accordingly
+// Returns the next session of the round and updates currentSession & isBreak accordingly
 function getNextDuration() {
     if (!isBreak) {
         isBreak = true;
@@ -49,8 +49,21 @@ function getNextDuration() {
     return focusDuration;
 }
 
+// Returns the duration of the current session
+function getCurrentDuration() {
+    if (isBreak) {
+        if (currentSession < numFocusSessions - 1) {
+            return shortBreakDuration;
+        }
+        return longBreakDuration;
+    }
+    return focusDuration;
+}
+
 async function resetTimer(duration = focusDuration) {
     try {
+        clearInterval(intervalID); // stops any active countdown
+        intervalID = null;
         remaining = duration;
         await browser.storage.local.set({ remaining, isRunning: false });
     } catch (err) {
@@ -112,12 +125,15 @@ browser.storage.onChanged.addListener(async (changes, area) => {
 });
 
 
-// Listener for play/pause button in popup
+// Listener for buttons in popup.js
 browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     if (message.action === "play" && remaining !== 0) {
         await playTimer();
     } else if (message.action === "pause") {
         await pauseTimer();
+    } else if (message.action === "resetSession") {
+        let currentDuration = getCurrentDuration();
+        await resetTimer(currentDuration);
     }
 });
 
