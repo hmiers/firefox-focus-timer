@@ -11,22 +11,35 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-playPauseBtn.addEventListener("click", async () => {
-    isRunning = !isRunning;
-    playPauseBtn.textContent = isRunning ? "⏸" : "▶";
+async function init() {
+    try {
+        const { remaining, isRunning: running } = await browser.storage.local.get(["remaining", "isRunning"]);
+        timeDisplay.textContent = formatTime(remaining ?? 60);
+        isRunning = running ?? false;
+        playPauseBtn.textContent = isRunning ? "⏸" : "▶";
+    } catch (err) {
+        console.error("Initialisation of popup.js failed.", err);
+    }
+}
 
+playPauseBtn.addEventListener("click", async () => {
     // Sends message to background.js to play/pause the timer
     await browser.runtime.sendMessage({
-        action: isRunning ? "play" : "pause"
+        action: isRunning ? "pause" : "play"
     });
 });
 
 browser.storage.onChanged.addListener((changes, area) => {
-    if (area == "local" && changes.remaining) {
-        timeDisplay.textContent = formatTime(changes.remaining.newValue);
+    if (area === "local") {
+        if (changes.remaining) {
+            timeDisplay.textContent = formatTime(changes.remaining.newValue);
+        }
+
+        if (changes.isRunning) {
+            isRunning = changes.isRunning.newValue;
+            playPauseBtn.textContent = isRunning ? "⏸" : "▶";
+        }
     }
 });
 
-browser.storage.local.get("remaining").then(({ remaining}) => {
-    timeDisplay.textContent = formatTime(remaining ?? 60);
-});
+init();
