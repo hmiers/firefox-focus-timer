@@ -4,6 +4,7 @@ const timeDisplay = document.getElementById("time-display");
 const playPauseBtn = document.getElementById("play-pause-btn");
 const resetSessionBtn = document.getElementById("reset-session-btn");
 const resetRoundBtn = document.getElementById("reset-round-btn");
+const skipBtn = document.getElementById("skip-btn");
 
 let isRunning = false;
 
@@ -39,6 +40,11 @@ resetSessionBtn.addEventListener("click", async () => {
 resetRoundBtn.addEventListener("click", async () => {
     // Sends message to background.js to reset the current round
     await browser.runtime.sendMessage({ action: "resetRound" });
+});
+
+skipBtn.addEventListener("click", async () => {
+    // Sends message to background.js to skip the current session
+    await browser.runtime.sendMessage({ action: "skip" });
 });
 
 browser.storage.onChanged.addListener((changes, area) => {

@@ -9,6 +9,7 @@ let remaining = 0;
 let currentSession = 0;
 let isBreak = false;
 let intervalID = null;
+let isTransitioning = false;
 
 // Sets the default durations in local storage on install/reload
 async function initialiseDefaults() {
@@ -49,6 +50,20 @@ function getNextDuration() {
     return focusDuration;
 }
 
+// Advances to the next session of the round, unless a transition is already in progress
+async function advanceToNextSession() {
+    if (isTransitioning) { return; }
+    isTransitioning = true;
+    try {
+        const nextDuration = getNextDuration();
+        await resetTimer(nextDuration);
+    } catch (err) {
+        console.error("Error in advancing to next session.", err);
+    } finally {
+        isTransitioning = false;
+    }
+}
+
 // Returns the duration of the current session
 function getCurrentDuration() {
     if (isBreak) {
@@ -82,11 +97,9 @@ async function updateTimer() {
             clearInterval(intervalID);
             intervalID = null;
             console.log("Timer fininshed.");
-            await browser.storage.local.set({ remaining: 0});
             
-            // Calls getNextDuration to apply pomodoro logic
-            let nextDuration = getNextDuration();
-            await resetTimer(nextDuration);
+            // pomodoro logic is buried in here
+            await advanceToNextSession();
         }
     } catch (err) {
         console.error("Failed to update timer: ", err);
@@ -138,6 +151,9 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         currentSession = 0;
         isBreak = false;
         await resetTimer(focusDuration);
+    } else if (message.action === "skip") {
+        await advanceToNextSession();
+        console.log("Session skipped.");
     }
 });
 
