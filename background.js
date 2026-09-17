@@ -9,9 +9,10 @@ let remaining = 0;
 let currentSession = 0;
 let isBreak = false;
 let intervalID = null;
+let isTransitioning = false;
 
 // Sets the default durations in local storage on install/reload
-async function initialiseDefaults() {
+async function initialiseDefaultSettings() {
     try {
         await browser.storage.local.set({
                 pomodoroDurations: { sessions: 4, focus: 25 * 60, shortBreak: 5 * 60, longBreak: 30 * 60}
@@ -22,7 +23,7 @@ async function initialiseDefaults() {
 }
 
 // Loads the stored durations from local
-async function loadDurations() {
+async function loadDurationSettings() {
     try {
         const { pomodoroDurations: durations } = await browser.storage.local.get("pomodoroDurations");
         numFocusSessions = durations.sessions;
@@ -34,23 +35,66 @@ async function loadDurations() {
     }
 }
 
-// Returns the next phase of the session and updates currentSession & isBreak accordingly
+// Loads the current round state from storage
+async function loadCurrentState() {
+    try {
+        const { currentState: state } = await browser.storage.local.get("currentState");
+        currentSession = state?.currentSession ?? 0;
+        isBreak = state?.isBreak ?? false;
+    } catch (err) {
+        console.error("Failed to load current state.", err);
+
+    }
+}
+
+// Returns the next session of the round and updates currentSession & isBreak accordingly
 function getNextDuration() {
     if (!isBreak) {
-        isBreak = true;
         if (currentSession < numFocusSessions - 1) {
             return shortBreakDuration;
         } else {
             return longBreakDuration;
         }
     }
-    isBreak = false;
-    currentSession = (currentSession + 1) % numFocusSessions;
+    return focusDuration;
+}
+
+// Advances to the next session of the round, unless a transition is already in progress
+async function advanceToNextSession() {
+    if (isTransitioning) { return; }
+    isTransitioning = true;
+    try {
+        const nextDuration = getNextDuration();
+        if (isBreak) {
+            currentSession = (currentSession + 1) % numFocusSessions;
+            isBreak = false;
+        } else {
+            isBreak = true;
+        }
+        await browser.storage.local.set({ currentState: { currentSession, isBreak } });
+        await resetTimer(nextDuration);
+    } catch (err) {
+        console.error("Error in advancing to next session.", err);
+    } finally {
+        isTransitioning = false;
+    }
+}
+
+// Returns the duration of the current session
+function getCurrentDuration() {
+    if (isBreak) {
+        if (currentSession < numFocusSessions - 1) {
+            return shortBreakDuration;
+        }
+        return longBreakDuration;
+    }
     return focusDuration;
 }
 
 async function resetTimer(duration = focusDuration) {
     try {
+        clearInterval(intervalID); // stops any active countdown
+        intervalID = null;
         remaining = duration;
         await browser.storage.local.set({ remaining, isRunning: false });
     } catch (err) {
@@ -69,11 +113,9 @@ async function updateTimer() {
             clearInterval(intervalID);
             intervalID = null;
             console.log("Timer fininshed.");
-            await browser.storage.local.set({ remaining: 0});
             
-            // Calls getNextDuration to apply pomodoro logic
-            let nextDuration = getNextDuration();
-            await resetTimer(nextDuration);
+            // pomodoro logic is buried in here
+            await advanceToNextSession();
         }
     } catch (err) {
         console.error("Failed to update timer: ", err);
@@ -100,11 +142,11 @@ async function pauseTimer() {
     }
 }
 
-// Add listener for changes in duration settings and update durations accordingly (using loadDurations)
+// Add listener for changes in duration settings and update durations accordingly (using loadDurationSettings)
 browser.storage.onChanged.addListener(async (changes, area) => {
     if (area == "local" && changes.pomodoroDurations) {
         try {
-            await loadDurations();
+            await loadDurationSettings();
         } catch (err) {
             console.error("Failed to reload durations after settings change.", err);
         }
@@ -112,20 +154,32 @@ browser.storage.onChanged.addListener(async (changes, area) => {
 });
 
 
-// Listener for play/pause button in popup
+// Listener for buttons in popup.js
 browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     if (message.action === "play" && remaining !== 0) {
         await playTimer();
     } else if (message.action === "pause") {
         await pauseTimer();
+    } else if (message.action === "resetSession") {
+        let currentDuration = getCurrentDuration();
+        await resetTimer(currentDuration);
+    } else if (message.action === "resetRound") {
+        currentSession = 0;
+        isBreak = false;
+        await browser.storage.local.set({ currentState: { currentSession: 0, isBreak: false } });
+        await resetTimer(focusDuration);
+    } else if (message.action === "skip") {
+        await advanceToNextSession();
+        console.log("Session skipped.");
     }
 });
 
 // On browser startup starts a new session (durations loaded from storage)
 browser.runtime.onStartup.addListener(async () => {
     try {
-        await loadDurations();
-        await resetTimer();
+        await loadDurationSettings();
+        await loadCurrentState();
+        await resetTimer(getNextDuration());
     } catch (err) {
         console.error("Failed to start new session and load durations on browser startup.", err);
     }
@@ -134,8 +188,9 @@ browser.runtime.onStartup.addListener(async () => {
 // On extension reload/install set stored durations to defaults and start a new session
 browser.runtime.onInstalled.addListener(async () => {
     try {
-        await initialiseDefaults();
-        await loadDurations();
+        await initialiseDefaultSettings();
+        await loadDurationSettings();
+        await browser.storage.local.set({ currentState: { currentSession: 0, isBreak: false } });
         await resetTimer();
     } catch (err) {
         console.error("Failed to initailise defaults and start new session on reload/install.", err);

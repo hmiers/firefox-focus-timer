@@ -6,9 +6,21 @@
     </head>
 
     <body>  
-        <div class="timer-container">   
+        <div class="timer-container"> 
+            <div class="status-display">
+                <div class="session-display">
+                    <div class="current-session-display" id="current-session-display">1</div>
+                    <div class="total-session-display" id="total-session-display">/4</div>
+                </div>
+                <div class="break-label" id="break-label">Focus</div>
+            </div>  
             <div class="time-display" id="time-display"> 00:00 </div>
             <button id="play-pause-btn">▶</button>
+            <button id="skip-btn">Skip Session</button>
+            <div class="secondary-controls">
+                <button id="reset-session-btn">Reset Session</button>
+                <button id="reset-round-btn">Reset Round</button>
+            </div>
         </div>
         <script src="popup.js"></script>
     </body>
