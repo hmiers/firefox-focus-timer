@@ -26,6 +26,29 @@ html, body {
     gap: 10px;
 }
 
+.status-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.session-display {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    font-size: 18px;
+    font-family: sans-serif;
+}
+
+.break-label {
+    font-size: 16px;
+    font-family: sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+}
+
 #play-pause-btn {
     font-size: 24px;
     width: 60px;

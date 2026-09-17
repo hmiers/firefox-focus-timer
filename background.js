@@ -12,7 +12,7 @@ let intervalID = null;
 let isTransitioning = false;
 
 // Sets the default durations in local storage on install/reload
-async function initialiseDefaults() {
+async function initialiseDefaultSettings() {
     try {
         await browser.storage.local.set({
                 pomodoroDurations: { sessions: 4, focus: 25 * 60, shortBreak: 5 * 60, longBreak: 30 * 60}
@@ -23,7 +23,7 @@ async function initialiseDefaults() {
 }
 
 // Loads the stored durations from local
-async function loadDurations() {
+async function loadDurationSettings() {
     try {
         const { pomodoroDurations: durations } = await browser.storage.local.get("pomodoroDurations");
         numFocusSessions = durations.sessions;
@@ -35,18 +35,27 @@ async function loadDurations() {
     }
 }
 
+// Loads the current round state from storage
+async function loadCurrentState() {
+    try {
+        const { currentState: state } = await browser.storage.local.get("currentState");
+        currentSession = state?.currentSession ?? 0;
+        isBreak = state?.isBreak ?? false;
+    } catch (err) {
+        console.error("Failed to load current state.", err);
+
+    }
+}
+
 // Returns the next session of the round and updates currentSession & isBreak accordingly
 function getNextDuration() {
     if (!isBreak) {
-        isBreak = true;
         if (currentSession < numFocusSessions - 1) {
             return shortBreakDuration;
         } else {
             return longBreakDuration;
         }
     }
-    isBreak = false;
-    currentSession = (currentSession + 1) % numFocusSessions;
     return focusDuration;
 }
 
@@ -56,6 +65,13 @@ async function advanceToNextSession() {
     isTransitioning = true;
     try {
         const nextDuration = getNextDuration();
+        if (isBreak) {
+            currentSession = (currentSession + 1) % numFocusSessions;
+            isBreak = false;
+        } else {
+            isBreak = true;
+        }
+        await browser.storage.local.set({ currentState: { currentSession, isBreak } });
         await resetTimer(nextDuration);
     } catch (err) {
         console.error("Error in advancing to next session.", err);
@@ -126,11 +142,11 @@ async function pauseTimer() {
     }
 }
 
-// Add listener for changes in duration settings and update durations accordingly (using loadDurations)
+// Add listener for changes in duration settings and update durations accordingly (using loadDurationSettings)
 browser.storage.onChanged.addListener(async (changes, area) => {
     if (area == "local" && changes.pomodoroDurations) {
         try {
-            await loadDurations();
+            await loadDurationSettings();
         } catch (err) {
             console.error("Failed to reload durations after settings change.", err);
         }
@@ -150,6 +166,7 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     } else if (message.action === "resetRound") {
         currentSession = 0;
         isBreak = false;
+        await browser.storage.local.set({ currentState: { currentSession: 0, isBreak: false } });
         await resetTimer(focusDuration);
     } else if (message.action === "skip") {
         await advanceToNextSession();
@@ -160,8 +177,9 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 // On browser startup starts a new session (durations loaded from storage)
 browser.runtime.onStartup.addListener(async () => {
     try {
-        await loadDurations();
-        await resetTimer();
+        await loadDurationSettings();
+        await loadCurrentState();
+        await resetTimer(getNextDuration());
     } catch (err) {
         console.error("Failed to start new session and load durations on browser startup.", err);
     }
@@ -170,8 +188,9 @@ browser.runtime.onStartup.addListener(async () => {
 // On extension reload/install set stored durations to defaults and start a new session
 browser.runtime.onInstalled.addListener(async () => {
     try {
-        await initialiseDefaults();
-        await loadDurations();
+        await initialiseDefaultSettings();
+        await loadDurationSettings();
+        await browser.storage.local.set({ currentState: { currentSession: 0, isBreak: false } });
         await resetTimer();
     } catch (err) {
         console.error("Failed to initailise defaults and start new session on reload/install.", err);
